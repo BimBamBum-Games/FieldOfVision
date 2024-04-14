@@ -1,5 +1,9 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System;
+using UnityEditor.TerrainTools;
+
+
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -17,6 +21,7 @@ public class FieldOfVision : MonoBehaviour
     public Mesh mesh;
     [SerializeField] bool canShowRays = false;
     [SerializeField] bool showLogs = false;
+    public bool showOnGuiLogs = false;
 
     private void Awake() {
         //Newing mesh prevents mem leaks.
@@ -28,18 +33,20 @@ public class FieldOfVision : MonoBehaviour
     private float scannerLastTime = 0;
     private void Update() {
 
-        if (Time.time >= scannerInterval + scannerLastTime) {
-            scannerLastTime = Time.time;
-            GetDetectedColliders();
-            GetClosestDetection();
-            if (showLogs) {
-                Debug.LogWarning("Scann Thick!");
-            }
-        }
+        //if (Time.time >= scannerInterval + scannerLastTime) {
+        //    scannerLastTime = Time.time;
+        //    GetDetectedColliders();
+        //    GetClosestDetection();
+        //    if (showLogs) {
+        //        Debug.LogWarning("Scann Thick!");
+        //    }
+        //}
     }
 
     //LateUpdate fixes weird behaviours of rendering.
     private void LateUpdate() {
+        GetArcLength();
+        SetNumberOfRegulatedRays();
         FireRaycastsInView();
         RecalculateGeometry();
     }
@@ -60,11 +67,15 @@ public class FieldOfVision : MonoBehaviour
     public int numberOfTriangleEdges = 0;
     public int numberOfVertices = 0;
 
+    [SerializeField]
+    [Range(0, 50)]
+    private int rootIterationForInnerRays = 0;
+
 
     public int[] triangles;
     public void RecalculateGeometry() {
 
-        numberOfTrianlges = numberOfLines - 1;
+        numberOfTrianlges = rayDetectionPoints.Count - 2;
         numberOfTriangleEdges = 3 * numberOfTrianlges;
 
         triangles = new int[numberOfTriangleEdges];
@@ -107,8 +118,8 @@ public class FieldOfVision : MonoBehaviour
     public void FireRaycastsInView() {
         float angleInterval = fieldOfViewAngle / (numberOfLines - 1);
         float rewind = fieldOfViewAngle * 0.5f;
+        RayInfo castOld = RayInfo.Default();
         rayDetectionPoints.Clear();
-        RaycastHit hit;
         rayDetectionPoints.Add(Vector3.zero);
         for (int i = 0; i < numberOfLines; i++) {
 
@@ -119,14 +130,105 @@ public class FieldOfVision : MonoBehaviour
                 Debug.LogWarning("Hitting");
             }
 
-            if (Physics.Raycast(transform.position, transform.TransformDirection(pnt), out hit, fieldOfViewRadius, obstructionLayer) == true) {
-                rayDetectionPoints.Add(transform.InverseTransformPoint(hit.point));
-                
+            RayInfo castNew = FireRaycast(pnt);
+            RayInfo castReg = RayInfo.Default();
+            if(i > 0) {
+                if (castOld.instanceId != castNew.instanceId) {
+                    RayInfo oldone, newone;
+                    (castReg, castNew) = FindRootRay(castOld, castNew, rootIterationForInnerRays);
+                    if (castReg.hitLocalPosition != Vector3.zero) {
+                        rayDetectionPoints.Add(castReg.hitLocalPosition);
+                    }
+
+                    if (castNew.hitLocalPosition != Vector3.zero) {
+                        rayDetectionPoints.Add(castNew.hitLocalPosition);
+                    }
+                }
             }
-            else {
-                rayDetectionPoints.Add(pnt * fieldOfViewRadius);
-            }
+
+
+
+            rayDetectionPoints.Add(castNew.hitLocalPosition);
+            castOld = castNew;
         }
+    }
+
+    private (RayInfo, RayInfo) FindRootRay(RayInfo castOldInfo, RayInfo castNewInfo, int iteration) {
+
+        RayInfo newCaster;
+        //Yonlu vektor oldugundan hangisi ray cast once veya sonra min onem farketmez. O yone dogru aralama yapar.
+        Vector3 maxtomin = (castOldInfo.unitDirVector + castNewInfo.unitDirVector) * 0.5f;
+        newCaster = FireRaycast(maxtomin);
+
+        if (castOldInfo.instanceId == newCaster.instanceId) {
+            //Debug.LogWarning("old, new > " + castOldInfo.instanceId + " " + castNewInfo.instanceId);
+            castOldInfo = newCaster;
+        }
+        else {
+            castNewInfo = newCaster;
+        }
+
+        if (iteration == 0) {
+            return (castOldInfo, castNewInfo);
+        }
+        else {
+            return FindRootRay(castOldInfo, castNewInfo, iteration - 1);
+        }
+    }
+
+    public RayInfo FireRaycast(Vector3 localToWorld) {
+        RaycastHit hit;
+        RayInfo rayInfo;
+        if (Physics.Raycast(transform.position, transform.TransformDirection(localToWorld), out hit, fieldOfViewRadius, obstructionLayer) == true) {
+            rayInfo = RayInfo.Get(true, hit.distance, localToWorld, transform.InverseTransformPoint(hit.point), hit.colliderInstanceID , hit.collider);
+            //rayDetectionPoints.Add(transform.InverseTransformPoint(hit.point));
+        }
+        else {
+            rayInfo = RayInfo.Get(false, hit.distance, localToWorld, localToWorld * fieldOfViewRadius, int.MaxValue, hit.collider);
+            //rayDetectionPoints.Add(localToWorld * fieldOfViewRadius);
+        }
+        return rayInfo;
+    }
+
+    [Header("Arc Length")]
+    [SerializeField] float arcLength = 0;
+
+    [Range(0, 100f)]
+    [SerializeField] float arcResolution = 0;
+
+    //Arc Length = Q * r;
+    private void GetArcLength() {
+        arcLength = fieldOfViewRadius * Mathf.Deg2Rad * fieldOfViewAngle;
+    }
+
+    private void SetNumberOfRegulatedRays() {
+        numberOfLines = Mathf.CeilToInt(arcLength * arcResolution * 0.005f);
+        if (numberOfLines < 4) {
+            numberOfLines = 4;
+        }
+    }
+}
+
+public struct RayInfo {
+    //To take info to global
+    public bool ishit;
+    public float distance;
+    public Vector3 unitDirVector, hitLocalPosition;
+    public int instanceId;
+    public Collider col;
+    private RayInfo(bool _isHit, float _distance, Vector3 _unitDirVector, Vector3 _hitLocalPosition, int _instanceId, Collider _col) {
+        ishit = _isHit;
+        distance = _distance;
+        hitLocalPosition = _hitLocalPosition;
+        unitDirVector = _unitDirVector;
+        instanceId = _instanceId;
+        col = _col;
+    }
+    public static RayInfo Get(bool _isHit, float _distance, Vector3 _unitDirVector, Vector3 _hitLocalPosition, int _instanceId, Collider _col) {
+        return new RayInfo(_isHit, _distance, _unitDirVector, _hitLocalPosition, _instanceId, _col);
+    }
+    public static RayInfo Default() {
+        return default;
     }
 }
 
@@ -134,5 +236,37 @@ public class FieldOfVision : MonoBehaviour
 [CustomEditor(typeof(FieldOfVision))]
 public class FieldOfVisionEditor : Editor {
 
+    FieldOfVision fov;
+    SerializedProperty showGuiLabels;
+    private void OnEnable() {
+        fov = (FieldOfVision)target;
+        showGuiLabels = serializedObject.FindProperty(nameof(FieldOfVision.showOnGuiLogs));
+    }
+
+    public override void OnInspectorGUI() {
+        serializedObject.Update();
+        base.OnInspectorGUI();      
+        serializedObject.ApplyModifiedProperties();
+        
+    }
+
+    public void OnSceneGUI() {
+        if(showGuiLabels.boolValue == true) {
+            if (fov.rayDetectionPoints != null) {
+                Vector3 oldPoint = Vector3.zero;
+                for (int i = 0; i < fov.rayDetectionPoints.Count; i++) {
+                    if(Vector3.Distance(oldPoint, fov.transform.TransformPoint(fov.rayDetectionPoints[i])) < 0.2f) {
+                        Handles.Label((fov.transform.TransformPoint(fov.rayDetectionPoints[i]) - fov.transform.position) * 0.60f, $", {i} POINTS");
+                        oldPoint = fov.transform.TransformPoint(fov.rayDetectionPoints[i]);
+                    }
+                    else {
+                        Handles.Label(fov.transform.TransformPoint(fov.rayDetectionPoints[i]), $", {i} POINTS");
+                    }
+                    
+                }
+            }
+        }
+
+    }
 }
 #endif
