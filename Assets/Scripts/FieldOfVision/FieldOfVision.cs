@@ -1,6 +1,8 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System;
+using Unity.VisualScripting;
+
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -24,7 +26,7 @@ public class FieldOfVision : MonoBehaviour
 
     [Header("Ray Informations")]
     [ReadOnlyAttr]
-    public int numberOfLines = 5;
+    public int numberOfIntervalLines = 5;
     [ReadOnlyAttr]
     public int numberOfTrianlges = 0;
     [ReadOnlyAttr]
@@ -69,6 +71,8 @@ public class FieldOfVision : MonoBehaviour
 
     //LateUpdate fixes weird behaviours of rendering.
     private void LateUpdate() {
+        GetArcLength();
+        SetNumberOfRegulatedRays();
         FireRaycastsInView();
         RecalculateGeometry();
     }
@@ -129,15 +133,17 @@ public class FieldOfVision : MonoBehaviour
             }
         }
     }
-   
+
+    [ReadOnlyAttr] public int numberOfTotalLines;
     public void FireRaycastsInView() {
-        float angleInterval = fieldOfViewAngle / (numberOfLines - 1);
+        float angleInterval = fieldOfViewAngle / (numberOfIntervalLines - 1);
         float rewind = fieldOfViewAngle * 0.5f;
+        numberOfTotalLines = 0;
         RayInfo castOld = RayInfo.Default();
         rayDetectionPoints.Clear();
         rayDetectionPoints.Add(Vector3.zero);
         int i = 0;
-        while(i < numberOfLines) {
+        while(i < numberOfIntervalLines) {
 
             Vector3 pnt = GetVector3FromAngle(angleInterval * i - rewind);
 
@@ -153,9 +159,11 @@ public class FieldOfVision : MonoBehaviour
                 (castOld, castNew) = FindRootRay(castOld, castNew, rootIterationForInnerRays);
                 if (castOld.hitLocalPosition != Vector3.zero) {
                     rayDetectionPoints.Add(castOld.hitLocalPosition);
+                    numberOfTotalLines++;
                 }
                 if (castNew.hitLocalPosition != Vector3.zero) {
                     rayDetectionPoints.Add(castNew.hitLocalPosition);
+                    numberOfTotalLines++;
                 }
             }
             else {
@@ -165,6 +173,7 @@ public class FieldOfVision : MonoBehaviour
             rayDetectionPoints.Add(castNew.hitLocalPosition);
             castOld = castNew;
         }
+        numberOfTotalLines += numberOfIntervalLines;
     }
 
     //This part worls with unit vector points in local place. Finds the farthest and closest possible points.
@@ -207,9 +216,9 @@ public class FieldOfVision : MonoBehaviour
     }
 
     private void SetNumberOfRegulatedRays() {
-        numberOfLines = Mathf.CeilToInt(arcLength * arcResolution * 0.005f);
-        if (numberOfLines < 4) {
-            numberOfLines = 4;
+        numberOfIntervalLines = Mathf.CeilToInt(arcLength * arcResolution * 0.005f);
+        if (numberOfIntervalLines < 4) {
+            numberOfIntervalLines = 4;
         }
     }
 }
@@ -232,8 +241,10 @@ public struct RayInfo {
     public static RayInfo Get(bool _isHit, float _distance, Vector3 _unitDirVector, Vector3 _hitLocalPosition, int _instanceId, Collider _col) {
         return new RayInfo(_isHit, _distance, _unitDirVector, _hitLocalPosition, _instanceId, _col);
     }
+
+    //Int max value set to be max for instanceId.
     public static RayInfo Default() {
-        return default;
+        return new RayInfo(false, 0, Vector3.zero, Vector3.zero, int.MaxValue, null);
     }
 }
 
@@ -245,7 +256,7 @@ public class FieldOfVisionEditor : Editor {
     SerializedProperty showGuiLabels;
     private void OnEnable() {
         fov = (FieldOfVision)target;
-        showGuiLabels = serializedObject.FindProperty(nameof(FieldOfVision.showOnGuiLogs));
+        showGuiLabels = serializedObject.FindProperty("showOnGuiLogs");
     }
 
     public override void OnInspectorGUI() {
