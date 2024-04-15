@@ -338,13 +338,13 @@ MonoBehaviour:
   m_RequiresOpaqueTextureOption: 2
   m_CameraType: 0
   m_Cameras: []
-  m_RendererIndex: -1
+  m_RendererIndex: 0
   m_VolumeLayerMask:
     serializedVersion: 2
     m_Bits: 1
   m_VolumeTrigger: {fileID: 0}
   m_VolumeFrameworkUpdateModeOption: 2
-  m_RenderPostProcessing: 1
+  m_RenderPostProcessing: 0
   m_Antialiasing: 0
   m_AntialiasingQuality: 2
   m_StopNaN: 0
@@ -582,7 +582,7 @@ Transform:
   m_GameObject: {fileID: 743516908}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 15.2}
+  m_LocalPosition: {x: -11.5, y: -6.51, z: 7.47}
   m_LocalScale: {x: 2, y: 2, z: 2}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -706,7 +706,7 @@ GameObject:
   - component: {fileID: 1125728757}
   - component: {fileID: 1125728756}
   - component: {fileID: 1125728758}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Player
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -735,7 +735,7 @@ MonoBehaviour:
   numberOfTriangleEdges: 0
   numberOfVertices: 0
   arcLength: 0
-  arcResolution: 2
+  arcResolution: 20
   rootIterationForInnerRays: 10
   enemyLayer:
     serializedVersion: 2
@@ -838,7 +838,7 @@ GameObject:
   - component: {fileID: 1277165406}
   - component: {fileID: 1277165409}
   - component: {fileID: 1277165408}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Body
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1114,7 +1114,7 @@ Transform:
   m_GameObject: {fileID: 1354561343}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 188.17686, y: -1598.6486, z: 379.9856}
+  m_LocalPosition: {x: 0, y: -10, z: 0}
   m_LocalScale: {x: 5000, y: 1, z: 5000}
   m_ConstrainProportionsScale: 0
   m_Children: []
